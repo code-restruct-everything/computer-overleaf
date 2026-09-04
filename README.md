@@ -155,10 +155,12 @@ ss -tulpn | rg ':18437\b'
 
 ### 3. 显式拉取镜像（可选，首次启动会自动拉）
 
+同样是 rootful 部署，普通用户拉的镜像进的是用户自己的 rootless 存储，systemd 起的 rootful 容器看不到，等于白拉——要拉就得 `sudo`：
+
 ```bash
-podman pull docker.io/library/mongo:8.0
-podman pull docker.io/library/redis:7.4
-podman pull docker.io/sharelatex/sharelatex:6.3.0
+sudo podman pull docker.io/library/mongo:8.0
+sudo podman pull docker.io/library/redis:7.4
+sudo podman pull docker.io/sharelatex/sharelatex:6.3.0
 ```
 
 ### 4. 安装 Quadlet 文件
@@ -195,7 +197,7 @@ sudo systemctl start overleaf.service
 ```bash
 systemctl status mongo redis overleaf
 journalctl -u overleaf -f
-podman ps --filter name=overleaf --filter name=mongo --filter name=redis
+sudo podman ps --filter name=overleaf --filter name=mongo --filter name=redis
 ```
 
 首次启动 Overleaf 应用本身需要一点时间（初始化数据库索引等），日志里看到监听 `3000`/`80` 端口相关的行再去浏览器访问。
@@ -211,7 +213,7 @@ http://192.168.3.11:18437
 社区版是邀请制，没有公开注册页，第一个账号也要手动建：
 
 ```bash
-podman exec -it overleaf node modules/server-ce-scripts/scripts/create-user.mjs --email=你的邮箱@example.com
+sudo podman exec -it overleaf node modules/server-ce-scripts/scripts/create-user.mjs --email=你的邮箱@example.com
 ```
 
 执行后会打印一个一次性的设置密码链接（如果没配 SMTP，链接不会发邮件，只会打印在命令输出里），拿这个链接去浏览器里设置密码。之后如果要邀请其他人，同样用这个命令加 `--email`，或者登录后台的 Admin Panel 里点 "New User"。
@@ -231,7 +233,7 @@ Overleaf 镜像版本写死在 `quadlet/overleaf.container` 的 `Image=` 里（�
 1. 改 `quadlet/overleaf.container` 里的版本号
 2. `sudo install` 覆盖 `/etc/containers/systemd/overleaf.container`
 3. `sudo systemctl daemon-reload`
-4. `podman pull docker.io/sharelatex/sharelatex:<新版本>`
+4. `sudo podman pull docker.io/sharelatex/sharelatex:<新版本>`
 5. `sudo systemctl restart overleaf.service`
 
 升级前建议看一下官方 [Server CE Release Notes](https://github.com/overleaf/overleaf/wiki)，个别大版本升级会有额外的一次性迁移步骤（比如老版本升级到 5.x 之后才需要副本集，这个骨架已经是按新版本来的，不用管这一条）。
@@ -254,7 +256,7 @@ sudo systemctl start mongo.service redis.service overleaf.service
 - 编辑 `variables.env` 不需要 root
 - 安装 Quadlet 到系统目录需要 sudo
 - `systemctl daemon-reload`、启停服务需要 sudo
-- `podman exec` 建号操作需要能访问 podman socket（rootful 部署下通常需要 sudo 或加入相应组）
+- 任何 `podman` 命令（`exec`/`ps`/`pull`）只要是操作这三个容器，都需要 `sudo`——rootful 和 rootless Podman 是两套独立的容器存储，普通用户不加 sudo 直接看不到这些容器
 
 ## 后续建议
 
