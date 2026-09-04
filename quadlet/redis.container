@@ -1,0 +1,24 @@
+[Unit]
+Description=Redis for Overleaf (real-time doc sync / sessions / queues)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=redis
+Image=docker.io/library/redis:7.4
+Network=overleaf-net.network
+Volume=/home/hupenghui/Documents/overleaf/data/redis:/data
+# --appendonly matches the toolkit's REDIS_AOF_PERSISTENCE=true default, so a
+# restart doesn't lose recent doc-ops. --maxmemory keeps Redis from growing
+# unbounded; noeviction means it errors instead of silently dropping data
+# once full (fine at this scale, and safer for correctness than eviction).
+Exec=redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+# Optional hard cap on the container itself.
+# PodmanArgs=--memory=320m --memory-swap=320m
+
+[Service]
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

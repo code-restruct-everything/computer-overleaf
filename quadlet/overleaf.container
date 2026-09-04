@@ -1,0 +1,35 @@
+[Unit]
+Description=Overleaf Community Edition (web editor + LaTeX compiler, sandboxed compiles OFF)
+Wants=network-online.target
+After=network-online.target mongo.service redis.service
+Requires=mongo.service redis.service
+
+[Container]
+ContainerName=overleaf
+Image=docker.io/sharelatex/sharelatex:6.3.0
+Network=overleaf-net.network
+# Only reachable on the LAN interface at 192.168.3.11 — not on every
+# interface of the host, and not on the public internet.
+PublishPort=192.168.3.11:80:80
+Volume=/home/hupenghui/Documents/overleaf/data/overleaf:/var/lib/overleaf
+EnvironmentFile=/home/hupenghui/Documents/overleaf/variables.env
+# These wire up Mongo/Redis by container (DNS) name on overleaf-net, same
+# values the toolkit's docker-compose.vars.yml / .base.yml inject.
+Environment=OVERLEAF_MONGO_URL=mongodb://mongo/sharelatex
+Environment=OVERLEAF_REDIS_HOST=redis
+Environment=REDIS_HOST=redis
+Environment=REDIS_PORT=6379
+# No git-bridge, no sibling containers (SANDBOXED_COMPILES) here on purpose —
+# see README.md "内存与安全取舍" for why.
+Environment=GIT_BRIDGE_ENABLED=false
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=180
+# LaTeX compiles can legitimately take a while; give systemd room before it
+# considers a stop/restart hung.
+TimeoutStopSec=90
+
+[Install]
+WantedBy=multi-user.target

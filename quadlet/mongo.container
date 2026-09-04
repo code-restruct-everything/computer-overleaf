@@ -1,0 +1,27 @@
+[Unit]
+Description=MongoDB for Overleaf (replica set required by Overleaf's document-ops history)
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+ContainerName=mongo
+Image=docker.io/library/mongo:8.0
+Network=overleaf-net.network
+Volume=/home/hupenghui/Documents/overleaf/data/mongo:/data/db
+# --replSet is mandatory: Overleaf uses Mongo change streams / transactions
+# that only work against a replica set, even a single-node one.
+# --wiredTigerCacheSizeGB caps Mongo's default cache (normally ~50% of host
+# RAM minus 1GB), which is the single biggest memory knob on a small LAN box.
+# Raise this if you have RAM to spare and see slow queries under load.
+Exec=mongod --replSet overleaf --wiredTigerCacheSizeGB 0.5
+# Optional hard cap on the container itself, on top of the Mongo-level cache
+# limit above. Uncomment and tune once you've watched real usage.
+# PodmanArgs=--memory=768m --memory-swap=768m
+
+[Service]
+Restart=always
+RestartSec=5
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,71 @@
+{
+  "schema_version": "1",
+  "id": "overleaf",
+  "name": "Overleaf 社区版（局域网 LaTeX 协作编辑）",
+  "type": "systemd-service",
+  "description": "通过 Podman + Quadlet 运行 Overleaf CE + MongoDB + Redis 三个容器，供局域网内可信用户协作编辑 LaTeX 项目。未开启 Sandboxed Compiles，未部署 Nginx/TLS。",
+  "tags": [
+    "latex",
+    "overleaf",
+    "podman",
+    "quadlet",
+    "collaboration"
+  ],
+  "entrypoints": [
+    {
+      "kind": "http",
+      "url": "http://192.168.3.11"
+    }
+  ],
+  "runtime": {
+    "manager": "systemd",
+    "units": [
+      "mongo.service",
+      "redis.service",
+      "overleaf.service"
+    ],
+    "user": "root",
+    "wanted_by": "multi-user.target",
+    "after": [
+      "network-online.target"
+    ]
+  },
+  "paths": {
+    "project": "/home/hupenghui/Documents/overleaf",
+    "variables_env": "/home/hupenghui/Documents/overleaf/variables.env",
+    "variables_env_example": "/home/hupenghui/Documents/overleaf/variables.env.example",
+    "data_overleaf": "/home/hupenghui/Documents/overleaf/data/overleaf",
+    "data_mongo": "/home/hupenghui/Documents/overleaf/data/mongo",
+    "data_redis": "/home/hupenghui/Documents/overleaf/data/redis",
+    "quadlet_network_source": "/home/hupenghui/Documents/overleaf/quadlet/overleaf-net.network",
+    "quadlet_mongo_source": "/home/hupenghui/Documents/overleaf/quadlet/mongo.container",
+    "quadlet_redis_source": "/home/hupenghui/Documents/overleaf/quadlet/redis.container",
+    "quadlet_overleaf_source": "/home/hupenghui/Documents/overleaf/quadlet/overleaf.container",
+    "quadlet_installed_dir": "/etc/containers/systemd"
+  },
+  "commands": {
+    "check": "bash /home/hupenghui/Documents/overleaf/scripts/check_project.sh",
+    "init_mongo_replica_set": "bash /home/hupenghui/Documents/overleaf/scripts/init_mongo_replica_set.sh",
+    "create_user": "podman exec -it overleaf node modules/server-ce-scripts/scripts/create-user.mjs --email=someone@example.com",
+    "status": "systemctl status mongo redis overleaf",
+    "logs": "journalctl -u overleaf -f",
+    "start": "systemctl start mongo.service redis.service overleaf.service",
+    "stop": "systemctl stop overleaf.service redis.service mongo.service",
+    "restart": "systemctl restart overleaf.service"
+  },
+  "permissions": {
+    "read_status_requires_root": false,
+    "read_config_requires_root": false,
+    "write_config_requires_root": false,
+    "control_service_requires_root": true
+  },
+  "mirrors": [],
+  "notes": [
+    "未开启 Sandboxed Compiles（未挂载 docker.sock），编译进程与 web 进程共享同一容器，仅适合可信局域网用户，不要暴露到公网。",
+    "未部署 Nginx/TLS，直接以 HTTP 暴露在局域网 192.168.3.11:80。",
+    "注册采用邀请制：不开放公开注册页，只能由管理员用 create_user 命令或 Admin Panel 邀请具体邮箱。",
+    "首次启动 mongo 后必须执行一次 init_mongo_replica_set，否则保存文档会失败；之后是幂等的，重跑无副作用。",
+    "variables.env 含 OVERLEAF_INVITE_TOKEN_SECRET，不要提交到版本库，也不要在生成后改动。",
+    "mongo/redis 都设了内存相关的启动参数（wiredTigerCacheSizeGB / maxmemory）来控制常驻内存占用，见对应 .container 文件里的注释。"
+  ]
+}

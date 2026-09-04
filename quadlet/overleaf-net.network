@@ -1,0 +1,5 @@
+[Unit]
+Description=Private network for Overleaf CE containers (overleaf/mongo/redis)
+
+[Network]
+NetworkName=overleaf-net
