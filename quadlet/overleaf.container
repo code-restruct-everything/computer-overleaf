@@ -8,9 +8,11 @@ Requires=mongo.service redis.service
 ContainerName=overleaf
 Image=docker.io/sharelatex/sharelatex:6.3.0
 Network=overleaf-net.network
-# Only reachable on the LAN interface at 192.168.3.11:18437 — not on every
-# interface of the host, and not on the public internet.
-PublishPort=192.168.3.11:18437:80
+# Bound to all interfaces (0.0.0.0), not just the LAN one, so a local
+# process like cloudflared can reach it however it addresses this host
+# (127.0.0.1, the LAN IP, etc). Still not exposed to the public internet
+# unless something (router port-forward, the tunnel itself) routes to it.
+PublishPort=0.0.0.0:18437:80
 Volume=/home/hupenghui/Documents/overleaf/data/overleaf:/var/lib/overleaf
 EnvironmentFile=/home/hupenghui/Documents/overleaf/variables.env
 # These wire up Mongo/Redis by container (DNS) name on overleaf-net, same

@@ -41,7 +41,7 @@
 
 ## 端口与访问
 
-- 只监听局域网网卡地址 `192.168.3.11:18437`，不绑定 `0.0.0.0`，也不会暴露到公网
+- 绑定 `0.0.0.0:18437`（所有网络接口都能进来，包括本机 `127.0.0.1`，方便同机的 `cloudflared` 之类本地进程访问）；这本身不等于暴露到公网——是否对外，取决于路由器有没有做端口转发、有没有配 Cloudflare Tunnel 之类的东西指过来
 - 同局域网内其他设备直接打开 `http://192.168.3.11:18437` 即可
 
 ## 配置文件
@@ -82,7 +82,7 @@ cp /home/hupenghui/Documents/overleaf/variables.env.example /home/hupenghui/Docu
 - `mongo` 用 `--replSet overleaf` 启动（Overleaf 的文档操作历史依赖 Mongo 的 change streams/事务，单节点也必须是副本集）
 - `mongo` / `redis` 都带了内存相关的启动参数（`--wiredTigerCacheSizeGB` / `--maxmemory`），把常驻内存占用限制在几百 MB 级别，而不是让 Mongo 按「宿主机内存的一半」自己去抢
 - `overleaf` 容器本身也设了硬上限（`PodmanArgs=--memory=1536m --memory-swap=1536m`），防止编译大文档/多人并发编译时把宿主机内存吃满，影响这台机器上其他服务；超限会被 OOM kill，systemd 再自动拉起来
-- `overleaf` 只发布到 `192.168.3.11:18437`
+- `overleaf` 发布到 `0.0.0.0:18437`（所有接口，见上面"端口与访问"一节）
 - 自动重启由 systemd 接管（`Restart=always`）
 
 ## 内存与安全取舍
