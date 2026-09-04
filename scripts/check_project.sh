@@ -55,5 +55,9 @@ echo "== quadlet sanity =="
 for f in quadlet/*.container quadlet/*.network; do
   grep -q "^\[Unit\]" "$f" || { echo "$f missing [Unit] section"; exit 1; }
 done
+grep -q '^PublishPort=192\.168\.3\.11:18437:80$' quadlet/overleaf.container || {
+  echo "overleaf host port must be 192.168.3.11:18437"
+  exit 1
+}
 
 echo "OK"

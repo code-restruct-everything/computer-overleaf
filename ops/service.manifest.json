@@ -14,7 +14,7 @@
   "entrypoints": [
     {
       "kind": "http",
-      "url": "http://192.168.3.11"
+      "url": "http://192.168.3.11:18437"
     }
   ],
   "runtime": {
@@ -62,7 +62,7 @@
   "mirrors": [],
   "notes": [
     "未开启 Sandboxed Compiles（未挂载 docker.sock），编译进程与 web 进程共享同一容器，仅适合可信局域网用户，不要暴露到公网。",
-    "未部署 Nginx/TLS，直接以 HTTP 暴露在局域网 192.168.3.11:80。",
+    "未部署 Nginx/TLS，直接以 HTTP 暴露在局域网 192.168.3.11:18437。",
     "注册采用邀请制：不开放公开注册页，只能由管理员用 create_user 命令或 Admin Panel 邀请具体邮箱。",
     "首次启动 mongo 后必须执行一次 init_mongo_replica_set，否则保存文档会失败；之后是幂等的，重跑无副作用。",
     "variables.env 含 OVERLEAF_INVITE_TOKEN_SECRET，不要提交到版本库，也不要在生成后改动。",

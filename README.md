@@ -41,8 +41,8 @@
 
 ## 端口与访问
 
-- 只监听局域网网卡地址 `192.168.3.11:80`，不绑定 `0.0.0.0`，也不会暴露到公网
-- 同局域网内其他设备直接打开 `http://192.168.3.11` 即可
+- 只监听局域网网卡地址 `192.168.3.11:18437`，不绑定 `0.0.0.0`，也不会暴露到公网
+- 同局域网内其他设备直接打开 `http://192.168.3.11:18437` 即可
 
 ## 配置文件
 
@@ -81,7 +81,7 @@ cp /home/hupenghui/Documents/overleaf/variables.env.example /home/hupenghui/Docu
 - 三个容器都加入 `overleaf-net`，互相用容器名互访（`mongodb://mongo/sharelatex`、`redis:6379`）
 - `mongo` 用 `--replSet overleaf` 启动（Overleaf 的文档操作历史依赖 Mongo 的 change streams/事务，单节点也必须是副本集）
 - `mongo` / `redis` 都带了内存相关的启动参数（`--wiredTigerCacheSizeGB` / `--maxmemory`），把常驻内存占用限制在几百 MB 级别，而不是让 Mongo 按「宿主机内存的一半」自己去抢
-- `overleaf` 只发布到 `192.168.3.11:80`
+- `overleaf` 只发布到 `192.168.3.11:18437`
 - 自动重启由 systemd 接管（`Restart=always`）
 
 ## 内存与安全取舍
@@ -109,7 +109,7 @@ cp /home/hupenghui/Documents/overleaf/variables.env.example /home/hupenghui/Docu
 
 这样 `all` 扫描 `/home/hupenghui/Documents/*/ops/service.manifest.json` 时，就能把它当作一个自定义服务纳入台账。
 
-建议在正式启用前，先到 `all` 的"监听端口"页搜索 `80`，确认没有冲突。
+建议在正式启用前，先到 `all` 的"监听端口"页搜索 `18437`，确认没有冲突。
 
 ## 自检
 
@@ -149,7 +149,7 @@ openssl rand -base64 32
 ### 2. 用 all 先检查端口是否冲突
 
 ```bash
-ss -tulpn | rg ':80\b'
+ss -tulpn | rg ':18437\b'
 ```
 
 ### 3. 显式拉取镜像（可选，首次启动会自动拉）
@@ -202,7 +202,7 @@ podman ps --filter name=overleaf --filter name=mongo --filter name=redis
 ### 8. 从局域网内测试访问
 
 ```text
-http://192.168.3.11
+http://192.168.3.11:18437
 ```
 
 ### 9. 创建第一个（管理员）账号
@@ -260,7 +260,7 @@ sudo systemctl start mongo.service redis.service overleaf.service
 如果你下一步继续实施，优先顺序建议是：
 
 1. 先建好 `data/` 目录和 `variables.env`（含 invite token secret）
-2. 用 `all` 或 `ss` 检查端口 `80` 是否被占用
+2. 用 `all` 或 `ss` 检查端口 `18437` 是否被占用
 3. 安装四个 Quadlet 文件，`daemon-reload`
 4. 先起 `mongo`，跑一次 `init_mongo_replica_set.sh`
 5. 再起 `redis`、`overleaf`
