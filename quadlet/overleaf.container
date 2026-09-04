@@ -22,6 +22,11 @@ Environment=REDIS_PORT=6379
 # No git-bridge, no sibling containers (SANDBOXED_COMPILES) here on purpose —
 # see README.md "内存与安全取舍" for why.
 Environment=GIT_BRIDGE_ENABLED=false
+# Hard cap so a runaway compile (huge doc, many concurrent users) can't eat
+# all host RAM and affect the other services on this box (guacamole,
+# cloudreve, etc). Podman OOM-kills the container past this; systemd's
+# Restart=always below brings it back up. Raise if this proves too tight.
+PodmanArgs=--memory=1536m --memory-swap=1536m
 
 [Service]
 Restart=always

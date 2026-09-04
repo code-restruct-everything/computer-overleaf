@@ -81,6 +81,7 @@ cp /home/hupenghui/Documents/overleaf/variables.env.example /home/hupenghui/Docu
 - 三个容器都加入 `overleaf-net`，互相用容器名互访（`mongodb://mongo/sharelatex`、`redis:6379`）
 - `mongo` 用 `--replSet overleaf` 启动（Overleaf 的文档操作历史依赖 Mongo 的 change streams/事务，单节点也必须是副本集）
 - `mongo` / `redis` 都带了内存相关的启动参数（`--wiredTigerCacheSizeGB` / `--maxmemory`），把常驻内存占用限制在几百 MB 级别，而不是让 Mongo 按「宿主机内存的一半」自己去抢
+- `overleaf` 容器本身也设了硬上限（`PodmanArgs=--memory=1536m --memory-swap=1536m`），防止编译大文档/多人并发编译时把宿主机内存吃满，影响这台机器上其他服务；超限会被 OOM kill，systemd 再自动拉起来
 - `overleaf` 只发布到 `192.168.3.11:18437`
 - 自动重启由 systemd 接管（`Restart=always`）
 
