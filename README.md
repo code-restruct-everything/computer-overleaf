@@ -200,7 +200,13 @@ journalctl -u overleaf -f
 sudo podman ps --filter name=overleaf --filter name=mongo --filter name=redis
 ```
 
-首次启动 Overleaf 应用本身需要一点时间（初始化数据库索引等），日志里看到监听 `3000`/`80` 端口相关的行再去浏览器访问。
+首次启动 Overleaf 应用本身需要一点时间（初始化数据库索引、启动内部各个子服务等），日志里会有很多重试/迁移相关的输出，正常现象，不用一行行盯。判断"真的起来了没"，用它自带的健康检查接口更准：
+
+```bash
+curl http://192.168.3.11:18437/status
+```
+
+返回 `web is alive (web)` 就说明起来了，可以进行第 9 步；返回连接被拒绝/超时就是还没好，回去看 `journalctl -u overleaf -f` 里有没有报错。
 
 ### 8. 从局域网内测试访问
 
@@ -210,13 +216,23 @@ http://192.168.3.11:18437
 
 ### 9. 创建第一个（管理员）账号
 
-社区版是邀请制，没有公开注册页，第一个账号也要手动建：
+社区版是邀请制，没有公开注册页，第一个账号也要手动建。镜像里 `WORKDIR` 是 `/overleaf`（monorepo 根目录），但这个脚本在 `/overleaf/services/web/modules/...` 下面，所以要先 `cd services/web` 再跑，直接跑会报 `ERR_MODULE_NOT_FOUND`。第一个账号建议加 `--admin`，这样能登进后台管理面板：
 
 ```bash
-sudo podman exec -it overleaf node modules/server-ce-scripts/scripts/create-user.mjs --email=你的邮箱@example.com
+sudo podman exec -it overleaf bash -c "cd services/web && node modules/server-ce-scripts/scripts/create-user.mjs --admin --email=你的邮箱@example.com"
 ```
 
-执行后会打印一个一次性的设置密码链接（如果没配 SMTP，链接不会发邮件，只会打印在命令输出里），拿这个链接去浏览器里设置密码。之后如果要邀请其他人，同样用这个命令加 `--email`，或者登录后台的 Admin Panel 里点 "New User"。
+**成功判据**：看到这样的输出就是成功了——
+
+```
+Successfully created 你的邮箱@example.com as an admin user.
+
+Please visit the following URL to set a password for 你的邮箱@example.com and log in:
+
+  http://192.168.3.11:18437/user/password/set?passwordResetToken=...
+```
+
+复制那个 `Please visit...` 后面的链接，去浏览器打开设置密码。之后邀请其他人（不加 `--admin`），同样用这个命令换个邮箱，或者登录后台 Admin Panel 里点 "New User"。
 
 ### 10. 如需停用或重载
 

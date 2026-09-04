@@ -46,7 +46,7 @@
   "commands": {
     "check": "bash /home/hupenghui/Documents/overleaf/scripts/check_project.sh",
     "init_mongo_replica_set": "bash /home/hupenghui/Documents/overleaf/scripts/init_mongo_replica_set.sh",
-    "create_user": "sudo podman exec -it overleaf node modules/server-ce-scripts/scripts/create-user.mjs --email=someone@example.com",
+    "create_user": "sudo podman exec -it overleaf bash -c \"cd services/web && node modules/server-ce-scripts/scripts/create-user.mjs --email=someone@example.com\"",
     "status": "systemctl status mongo redis overleaf",
     "logs": "journalctl -u overleaf -f",
     "start": "systemctl start mongo.service redis.service overleaf.service",
