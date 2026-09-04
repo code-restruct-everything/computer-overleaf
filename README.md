@@ -56,7 +56,7 @@
 cp /home/hupenghui/Documents/overleaf/variables.env.example /home/hupenghui/Documents/overleaf/variables.env
 ```
 
-然后：
+复制完 `variables.env` 之后，**唯一必须手动填的字段只有 `OVERLEAF_INVITE_TOKEN_SECRET`**（其余字段已经按这次部署的端口/IP 预填好，不用动）。改完保存文件即可，不需要额外"加载"——`overleaf.container` 里的 `EnvironmentFile=` 会在 `systemctl start overleaf.service` 时自动读取它。
 
 - 生成 `OVERLEAF_INVITE_TOKEN_SECRET`（生成后不要再改，否则已发出的邀请链接会失效）：
   ```bash
