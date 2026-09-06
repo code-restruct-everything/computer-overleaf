@@ -418,6 +418,54 @@ sudo podman exec -it \
 - 用防火墙（`ufw`/`nftables`）限制 `7890` 端口只允许来自 `localhost` 和容器网段（`overleaf-net` 的网段，一般是 `10.89.x.0/24`）的连接；或者
 - 干脆继续用第 4 步的 `socat` 方案，不改 `sshd_config`——两种方式二选一即可，没必要同时开着。
 
+### 6. 验证部署是否成功
+
+`podman commit` + 改 `Image=` + 重启之后，别只看 `systemctl status` 是 `active` 就当成功了——换了底层镜像，容易在别的地方悄悄出问题。按下面几层由浅到深确认一遍：
+
+**① 容器确实用上了新镜像**
+
+```bash
+sudo podman ps --filter name=overleaf --format "table {{.Names}}\t{{.Image}}\t{{.Status}}"
+```
+
+`IMAGE` 列要显示新的 `localhost/overleaf-texlive-full:6.3.0`，不是旧的 `docker.io/sharelatex/sharelatex:6.3.0`。如果还是旧镜像，说明 `/etc/containers/systemd/overleaf.container` 没被真正覆盖，或者 `daemon-reload` 没跑，回去重新走一遍第 2 步。
+
+**② 服务本身健康**
+
+```bash
+curl http://192.168.3.11:18437/status
+```
+
+应返回 `web is alive (web)`。不通就看日志：
+
+```bash
+journalctl -u overleaf -f
+```
+
+**③ 包确实装进了这个新容器**
+
+```bash
+sudo podman exec -it overleaf kpsewhich breakurl.sty
+```
+
+能打印出一个路径（如 `/usr/local/texlive/.../breakurl.sty`）说明包在；返回空说明 commit 的时候顺序不对，或者装错了容器。
+
+**④ 真实编译回归测试（最关键，前三层都过了也不能跳过）**
+
+1. 打开之前报 `breakurl.sty not found` 的那个项目，重新编译，确认不再报错、能正常出 PDF
+2. **再测一个跟这次改动无关的普通项目**（比如空白默认模板），确认换镜像没有意外改坏别的东西——这一步最容易漏
+3. 如果是多人协作的场景，找另一个账号也登录编译一次，排除只是自己浏览器缓存的假象
+
+**⑤ 数据库层没受影响**
+
+这次只换了 `overleaf` 容器，`mongo`/`redis` 不应该跟着重启过：
+
+```bash
+sudo podman ps --filter name=mongo --filter name=redis
+```
+
+两个容器的 `STATUS` 应该是持续 `Up`，没有最近才重启的痕迹（如果 `Up` 后面的时间比 `overleaf` 短很多，说明它们也被重启了，得回头查为什么）。
+
 ## 备份怎么做
 
 需要备份的只有 `data/` 目录（三个子目录都要）：
