@@ -254,6 +254,170 @@ Overleaf 镜像版本写死在 `quadlet/overleaf.container` 的 `Image=` 里（�
 
 升级前建议看一下官方 [Server CE Release Notes](https://github.com/overleaf/overleaf/wiki)，个别大版本升级会有额外的一次性迁移步骤（比如老版本升级到 5.x 之后才需要副本集，这个骨架已经是按新版本来的，不用管这一条）。
 
+## 补充 TeX Live 包（缺 .sty 报错，比如 breakurl）
+
+镜像里的 TeX Live 只装了 `scheme-basic`（省体积），碰到某些模板 `.cls` 要求的包没装上时会报类似这样的错：
+
+```
+! LaTeX Error: File 'breakurl.sty' not found.
+```
+
+解决办法：进容器用 `tlmgr` 补包，再把改动固化成新镜像，让 `overleaf.container` 指向它。
+
+### 1. 进容器装包
+
+```bash
+sudo podman exec -it overleaf bash
+```
+
+```bash
+# 推荐：一次装全套，以后少踩坑（几个 GB，装几分钟到十几分钟）
+tlmgr install scheme-full
+tlmgr path add
+```
+
+只想解决当前这一个报错，磁盘/带宽紧张的话：
+
+```bash
+tlmgr install breakurl
+tlmgr path add
+```
+
+**注意**：每次 `tlmgr install` 之后都要执行 `tlmgr path add`，否则新装的东西不会正确链接进系统路径。装完 `exit` 退出容器。
+
+### 2. 固化改动（必须做，否则下次重建容器就丢）
+
+上面的改动只在 `overleaf` 容器的可写层里，`podman pull` 新镜像或者以后升级替换镜像时会被冲掉。用 `podman commit` 存成新镜像：
+
+```bash
+sudo podman commit overleaf localhost/overleaf-texlive-full:6.3.0
+```
+
+然后把 `quadlet/overleaf.container` 里的：
+
+```
+Image=docker.io/sharelatex/sharelatex:6.3.0
+```
+
+改成：
+
+```
+Image=localhost/overleaf-texlive-full:6.3.0
+```
+
+再应用并重启：
+
+```bash
+sudo install -m 0644 /home/hupenghui/Documents/overleaf/quadlet/overleaf.container /etc/containers/systemd/overleaf.container
+sudo systemctl daemon-reload
+sudo systemctl restart overleaf.service
+```
+
+`systemctl restart` 会按新的 `Image=` 重新创建容器，新装的包就在新容器里持续生效了。
+
+### 3. 以后升级时要重做一遍
+
+升级 Overleaf 版本（见上面「升级怎么做」）拉的是干净的官方镜像，之前装的包不会带过去。每次升级后要重复一遍「进容器装包 → `podman commit` → 改 `Image=`」。
+
+### 4. `tlmgr install` 连不上 CTAN 时：走代理
+
+这台机器如果只能通过 SSH 转发的代理上网（比如本机反向转发了一个 `7890` 端口），会遇到两层坑：
+
+1. **SSH `-R` 远程转发默认只绑定服务器自己的回环地址**（`127.0.0.1` / `[::1]`），`sudo ss -tulpn | grep 7890` 能看到监听者是 `sshd` 而不是真正的代理进程。
+2. 容器是独立网络命名空间，访问宿主机要用 Podman 提供的 `host.containers.internal`（解析到 `overleaf-net` 网桥的网关地址，比如 `10.89.2.1`），这个地址连不到宿主机的 `127.0.0.1:7890`。
+
+解法：在宿主机上用 `socat` 搭一个中继，监听在网桥网关地址上，转发到宿主机自己的回环地址——这样只有 `overleaf-net` 里的容器能用到这个代理，不会把 7890 暴露给整个局域网：
+
+```bash
+# 查一下容器看到的网关地址（一般跟 host.containers.internal 解析结果一致）
+sudo podman exec -it overleaf getent hosts host.containers.internal
+
+# 装 socat（没有的话）
+sudo apt-get install -y socat
+
+# 起中继：把 <网关IP> 换成上一步查到的地址
+sudo socat TCP-LISTEN:7890,bind=<网关IP>,fork,reuseaddr TCP:127.0.0.1:7890
+```
+
+新开一个终端测试连通性：
+
+```bash
+sudo podman exec -it overleaf curl -x http://host.containers.internal:7890 -I https://mirror.ctan.org
+```
+
+能返回状态码就说明通了，然后带着代理环境变量进容器装包：
+
+```bash
+sudo podman exec -it \
+  -e http_proxy=http://host.containers.internal:7890 \
+  -e https_proxy=http://host.containers.internal:7890 \
+  overleaf bash
+
+tlmgr install scheme-full
+tlmgr path add
+exit
+```
+
+装完把 socat 进程杀掉（临时中继，不需要常驻）：
+
+```bash
+sudo pkill -f 'socat TCP-LISTEN:7890'
+```
+
+不建议把代理配置长期写进 `overleaf.container` 的 `Environment=`——那样 Overleaf 应用本身所有对外请求（以后配的 SMTP、遥测等）也会被迫走代理，没必要为了偶尔装包背这个长期负担。
+
+### 5. 另一种方式：直接让 sshd 支持 GatewayPorts（本机实际采用的方式）
+
+上面第 4 步的 `socat` 中继是绕开限制的做法；也可以从根上解决——让 SSH 的 `-R` 远程转发本身就绑定到 `0.0.0.0`，不再局限于服务器的回环地址。
+
+在服务器的 `/etc/ssh/sshd_config` 里加一行（或改已有的）：
+
+```
+GatewayPorts clientspecified
+```
+
+用 `clientspecified` 而不是 `yes`：`yes` 会让所有 `-R` 转发都强制绑定 `0.0.0.0`；`clientspecified` 则是由发起转发的一方（`ssh -R` 命令里）决定绑定地址，默认还是回环，只有显式写 `0.0.0.0:` 前缀时才对外开放——更保险，不会误伤其他你不想公开的转发端口。
+
+改完重启 sshd：
+
+```bash
+sudo systemctl restart ssh
+```
+
+**注意服务名跟系统有关**：这台机器是 Ubuntu，systemd 单元名是 `ssh`（`systemctl status ssh` 能看到），不是 `sshd`——`sshd` 是 RHEL/CentOS/Fedora 那一系的叫法，在 Ubuntu 上直接 `systemctl restart sshd` 会报 `Unit sshd.service not found`。如果哪天换到别的发行版上部署，记得把这条命令换回 `sshd`。
+
+然后在发起转发的那一端（运行实际代理软件的机器上），把原来的：
+
+```bash
+ssh -R 7890:127.0.0.1:7890 hupenghui@<服务器地址>
+```
+
+改成显式指定绑定地址：
+
+```bash
+ssh -R 0.0.0.0:7890:127.0.0.1:7890 hupenghui@<服务器地址>
+```
+
+重新连上之后再查一遍，应该能看到监听地址变成了 `0.0.0.0`：
+
+```bash
+sudo ss -tulpn | grep 7890
+```
+
+这样容器就能直接用宿主机的真实地址访问代理，不用再起 `socat` 中继：
+
+```bash
+sudo podman exec -it \
+  -e http_proxy=http://host.containers.internal:7890 \
+  -e https_proxy=http://host.containers.internal:7890 \
+  overleaf bash
+```
+
+**权衡**：这种方式把 `7890` 端口暴露给了服务器的所有网络接口，包括局域网——比第 4 步 `socat` 只绑定到 `overleaf-net` 网桥网关（只有容器能访问）范围更大。如果这台服务器的局域网内还有不完全可信的设备，建议：
+
+- 用防火墙（`ufw`/`nftables`）限制 `7890` 端口只允许来自 `localhost` 和容器网段（`overleaf-net` 的网段，一般是 `10.89.x.0/24`）的连接；或者
+- 干脆继续用第 4 步的 `socat` 方案，不改 `sshd_config`——两种方式二选一即可，没必要同时开着。
+
 ## 备份怎么做
 
 需要备份的只有 `data/` 目录（三个子目录都要）：
